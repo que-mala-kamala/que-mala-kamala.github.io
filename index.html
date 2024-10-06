@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>North Carolina Precinct Opportunity</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.21/css/jquery.dataTables.min.css">
+    <style>
+        #map-container {
+            width: 60%;
+            margin: 20px auto;
+        }
+        #map-container svg {
+            width: 100%;
+            height: auto;
+        }
+        svg path:hover {
+            fill: lightblue;
+        }
+        .selected-precinct {
+            fill: yellow !important;
+            stroke: black;
+            stroke-width: 2px;
+        }
+        #clear-search-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 8px 16px;
+            background-color: #f8f9fa;
+            color: #333;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #clear-search-btn:hover {
+            background-color: #e2e6ea;
+            border-color: #dae0e5;
+        }
+    </style>
+</head>
+<body>
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+    <h3>NC Precinct Opportunity | Last day to register: Oct 11 (By mail), Nov 2 (By early voting)</h3>
+    <button id="clear-search-btn">Clear Search</button>
+    <table id="precinctsTable" class="display">
+        <thead>
+            <tr>
+                <th>Precinct ID</th>
+                <th>Precinct ID2</th>
+                <th>County</th>
+                <th>Unregistered Addresses</th>
+                <th>GOP Vote % (2016)</th>
+                <th>GOP Vote % (2020)</th>
+                <th>GOP Vote % Avg</th>
+                <th>Unregistered GOP Addresses</th>
+            </tr>
+        </thead>
+        <tbody id="precinctsBody">
+        </tbody>
+    </table>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.21/js/jquery.dataTables.min.js"></script>
+    <script>
+        let table;
+
+        fetch('/nc_final/nc_precincts_colored.svg')
+            .then(response => response.text())
+            .then(svgData => {
+                document.getElementById('map').innerHTML = svgData;
+                addClickListeners();
+            });
+
+        fetch('/nc_final/voters_votes.json')
+            .then(response => response.json())
+            .then(data => {
+                precinctData = data.filter(p => p.properties.unreg_rep_votes !== null);
+                populateTable(precinctData);
+                addClickListeners();
+            });
+
+        function addClickListeners() {
+            const paths = document.querySelectorAll('svg path');
+            paths.forEach(path => {
+                path.addEventListener('click', (e) => {
+                    const precinctId = e.target.id;
+                    highlightPrecinctOnMap(precinctId);
+                    searchTableByPrecinct(precinctId);
+                });
+            });
+        }
+
+        function populateTable(data) {
+            const tbody = document.getElementById('precinctsBody');
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.properties.prec_id}</td>
+                    <td>${item.properties.id}</td>
+                    <td>${item.properties.county}</td>
+                    <td>${item.properties.unregistered_addresses_count}</td>
+                    <td>${item.properties.rep_vote_percentage_2016 !== null ? item.properties.rep_vote_percentage_2016.toFixed(2) : 'N/A'}</td>
+                    <td>${item.properties.rep_vote_percentage_2020 !== null ? item.properties.rep_vote_percentage_2020.toFixed(2) : 'N/A'}</td>
+                    <td>${item.properties.rep_vote_pct_avg !== null ? item.properties.rep_vote_pct_avg.toFixed(2) : 'N/A'}</td>
+                    <td>${item.properties.unreg_rep_votes.toFixed(2)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            table = $('#precinctsTable').DataTable({
+                "order": [[7, "desc"]]
+            });
+        }
+
+        function searchTableByPrecinct(precinctId) {
+            const searchRegex = `^${precinctId}$`;
+            table.column(1).search(searchRegex, true, false).draw();
+            $('.dataTables_filter input').val(precinctId);
+        }
+
+        function highlightPrecinctOnMap(precinctId) {
+            document.querySelectorAll('svg path.selected-precinct').forEach(path => {
+                path.classList.remove('selected-precinct');
+            });
+            const selectedPath = document.getElementById(precinctId);
+            if (selectedPath) {
+                selectedPath.classList.add('selected-precinct');
+            }
+        }
+
+        document.getElementById('clear-search-btn').addEventListener('click', () => {
+            table.search('').columns().search('').draw();
+            document.querySelectorAll('svg path.selected-precinct').forEach(path => {
+                path.classList.remove('selected-precinct');
+            });
+            $('.dataTables_filter input').val('');
+        });
+    </script>
+</body>
+</html>
